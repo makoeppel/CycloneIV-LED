@@ -40,7 +40,8 @@ if (reset_n = '0') then
 elsif rising_edge(i_clk) then 
 	if (i_sync_reset='1') then
 		r_lfsr   <= i_seed;
-	elsif (i_en = '1') then
+	--elsif (i_en = '1') then
+	else
 		r_lfsr   <= '0' & r_lfsr(G_M downto 2) xor w_mask;
 	end if; 
 end if;

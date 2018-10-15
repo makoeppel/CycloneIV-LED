@@ -514,14 +514,17 @@ end component linear_shift;
   signal LCD_display : LCD_display_string:=(others =>' ');
   
   --- linear shift reg ---
-  signal next_shift : std_logic_vector(4 downto 0);
-  signal next_next_shift : std_logic_vector(4 downto 0);
+  signal old_shift : std_logic_vector(4 downto 0) := "10101";
+  signal led_shift : std_logic_vector(4 downto 0);
   signal shifts : std_logic_vector(20 downto 0);
   signal shift_counter : std_logic_vector(1 downto 0);
   signal en_shift : std_logic;
   signal oneHz : std_logic;
   signal fifo_empty0 : std_logic;
   signal fifo_data0 : std_logic_vector(6 downto 0);
+  
+  signal n_0 : std_logic_vector(4 downto 0);
+  signal n_1 : std_logic_vector(4 downto 0);
   
   	signal r_lfsr : std_logic_vector (5 downto 1);
 	signal w_poly : std_logic_vector (5 downto 1);
@@ -596,13 +599,13 @@ begin
   
 
   --transceiver stat leds
-  hsma_sl_stat_led(0) <= next_shift(2);
-  hsma_sl_rx_led(0) <= next_shift(1);
-  hsma_sl_tx_led(0) <= next_shift(0);
+  hsma_sl_stat_led(0) <= n_0(2);
+  hsma_sl_rx_led(0) <= n_0(1);
+  hsma_sl_tx_led(0) <= n_0(0);
   
   --hsma_sl_stat_led(1) <= next_shift(5);
-  hsma_sl_rx_led(1) <= next_shift(4);
-  hsma_sl_tx_led(1) <= next_shift(3);
+  hsma_sl_rx_led(1) <= n_0(4);
+  hsma_sl_tx_led(1) <= n_0(3);
   
   hsma_sl_stat_led(2) <= '1';
   hsma_sl_rx_led(2) <= '1';
@@ -640,26 +643,44 @@ begin
 		i_sync_reset => not push_button1_db,
 		i_seed       => "00100",
 		i_en         => push_button0_db,
-		o_lsfr       => next_shift
+		o_lsfr       => n_0
 	);
-		
-	w_poly <= "10100";
-	g_mask : for k in 5 downto 1 generate
-		w_mask(k) <= w_poly(k) and r_lfsr(1);
-	end generate g_mask;
+
+--	next_r : component next_reg
+--	generic map (
+--		G_M    => 5,
+--		G_POLY => "10100" -- x^7+x^6+1 
+--	)
+--	port map (
+--		i_seed          => old_shift,
+--		o_lsfr          => n_1
+--	);
+
+  shift2 : component linear_shift
+	generic map (
+		G_M    => 5,
+		G_POLY => "10100" -- x^7+x^6+1 
+	)
+	port map (
+		i_clk        => xcvr_ref_clk,
+		reset_n      => push_button2_db,
+		i_sync_reset => not push_button1_db,
+		i_seed       => old_shift,
+		i_en         => push_button0_db,
+		o_lsfr       => n_1
+	);
 	
 	clkout_sma <= en_shift;
 	
-	compare : process (xcvr_ref_clk, push_button1_db)
-		variable shift_old : std_logic_vector(4 downto 0) := "00100";
+	compare : process (xcvr_ref_clk, push_button0_db)
     begin
-		if (not push_button1_db = '0') then
-			next_next_shift <= shift_old;
+		if (not push_button0_db = '1') then
+			led_shift <= n_1;
 	 	elsif (rising_edge(xcvr_ref_clk)) then
-			next_next_shift <= shift_old;
-			if (shift_old = next_shift) then
+			led_shift <= n_1;
+			if (n_0 = n_1) then
 				en_shift <= '1';
-				shift_old := '0' & next_shift(4 downto 1) xor w_mask;
+				old_shift <= n_0;
 			else
 				en_shift <= '0';
 			end if;
@@ -670,7 +691,7 @@ begin
   lcd_process : process (xcvr_ref_clk)
   begin
   if rising_edge(xcvr_ref_clk) then
-		msg_bits <= "0011000" & push_button1_db & "0011000" & next_next_shift(3) & "0011000" & next_next_shift(2) & "0011000" & next_next_shift(1) & "0011000" & next_next_shift(0);
+		msg_bits <= "0011000" & led_shift(4) & "0011000" & led_shift(3) & "0011000" & led_shift(2) & "0011000" & led_shift(1) & "0011000" & led_shift(0);
   end if;
   end process lcd_process;
   
